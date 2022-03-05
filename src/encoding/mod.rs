@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 
+pub mod bit_packed;
 pub mod bitpacking;
 pub mod delta_bitpacked;
 pub mod delta_byte_array;
