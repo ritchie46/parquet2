@@ -87,6 +87,7 @@ impl<T, V: Iterator<Item = bool>, I: Iterator<Item = T>> Iterator for OptionalVa
 pub struct SliceFilteredIter<I> {
     iter: I,
     selected_rows: VecDeque<Interval>,
+    total: usize, // a cache
     current_remaining: usize,
     current: usize, // position in the slice
 }
@@ -94,9 +95,11 @@ pub struct SliceFilteredIter<I> {
 impl<I> SliceFilteredIter<I> {
     /// Return a new [`SliceFilteredIter`]
     pub fn new(iter: I, selected_rows: VecDeque<Interval>) -> Self {
+        let total = selected_rows.iter().map(|x| x.length).sum();
         Self {
             iter,
             selected_rows,
+            total,
             current_remaining: 0,
             current: 0,
         }
@@ -115,16 +118,25 @@ impl<T, I: Iterator<Item = T>> Iterator for SliceFilteredIter<I> {
                 let item = self.iter.nth(interval.start - self.current);
                 self.current = interval.start + interval.length;
                 self.current_remaining = interval.length - 1;
+                self.total -= 1;
                 item
             } else {
                 None
             }
         } else {
             self.current_remaining -= 1;
+            self.total -= 1;
             self.iter.next()
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (min, max) = self.iter.size_hint();
+        (min.min(self.total), max.map(|x| x.min(self.total)))
+    }
 }
+
+impl<I: ExactSizeIterator> ExactSizeIterator for SliceFilteredIter<I> {}
 
 #[cfg(test)]
 mod test {
@@ -151,5 +163,26 @@ mod test {
             .collect();
 
         assert_eq!(expected, a.collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn size_hint() {
+        let iter = 0..=100;
+
+        let intervals = vec![
+            Interval::new(0, 2),
+            Interval::new(20, 11),
+            Interval::new(31, 1),
+        ];
+
+        let a = intervals.into_iter().collect();
+        let mut iter = SliceFilteredIter::new(iter, a);
+
+        iter.next();
+        iter.next();
+        iter.next();
+
+        let expected = 2 + 11 + 1 - 3;
+        assert_eq!(iter.size_hint(), (expected, Some(expected)))
     }
 }
