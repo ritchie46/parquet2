@@ -164,6 +164,27 @@ pub fn decompress(compression: Compression, input_buf: &[u8], output_buf: &mut [
             crate::error::Feature::Lz4,
             "decompress with lz4".to_string(),
         )),
+        #[cfg(feature = "lz4")]
+        Compression::Lz4 => {
+            use std::io::Read;
+            let mut decoder = lz4::Decoder::new(input_buf)?;
+            let mut buffer: [u8; 4096] = [0; 4096];
+            let mut output_buf = output_buf;
+            loop {
+                let len = decoder.read(&mut buffer)?;
+                if len == 0 {
+                    break;
+                }
+                output_buf.copy_from_slice(&buffer[0..len]);
+                output_buf = &mut output_buf[len..];
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "lz4"))]
+        Compression::Lz4Raw => Err(Error::FeatureNotActive(
+            crate::error::Feature::Lz4,
+            "decompress with lz4".to_string(),
+        )),
         #[cfg(feature = "zstd")]
         Compression::Zstd => {
             use std::io::Read;
